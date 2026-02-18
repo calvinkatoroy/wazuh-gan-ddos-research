@@ -1,0 +1,90 @@
+# Configuration file for GAN-based DDoS Detection
+
+# Model Configuration
+model:
+  generator:
+    input_dim: 100
+    hidden_dims: [256, 512, 1024]
+    output_dim: 784
+    activation: 'relu'
+    
+  discriminator:
+    input_dim: 784
+    hidden_dims: [1024, 512, 256]
+    output_dim: 1
+    activation: 'leaky_relu'
+    dropout: 0.3
+
+# Training Configuration
+training:
+  batch_size: 64
+  epochs: 100
+  learning_rate:
+    generator: 0.0002
+    discriminator: 0.0001
+  optimizer: 'adam'
+  beta1: 0.5
+  device: 'cuda'  # or 'cpu'
+  checkpoint_dir: './checkpoints'
+  log_interval: 10
+  save_interval: 5
+
+# Data Configuration
+data:
+  dataset_path: './data/raw/'
+  processed_path: './data/processed/'
+  train_split: 0.7
+  val_split: 0.15
+  test_split: 0.15
+  normalize: true
+  augmentation: false
+
+# Feature Configuration
+features:
+  # Network flow features
+  flow_features:
+    - 'duration'
+    - 'protocol_type'
+    - 'src_bytes'
+    - 'dst_bytes'
+    - 'flag'
+    - 'land'
+    - 'wrong_fragment'
+    - 'urgent'
+    
+  # Statistical features
+  statistical_features:
+    - 'count'
+    - 'srv_count'
+    - 'serror_rate'
+    - 'srv_serror_rate'
+    - 'rerror_rate'
+    - 'srv_rerror_rate'
+    - 'same_srv_rate'
+    - 'diff_srv_rate'
+
+# Wazuh Configuration
+wazuh:
+  manager_ip: '127.0.0.1'
+  api_port: 55000
+  api_user: 'wazuh'
+  api_password: 'wazuh'  # TODO: Use environment variables
+  rules_path: './config/wazuh/rules.xml'
+  log_path: '/var/ossec/logs/alerts/alerts.json'
+
+# Evaluation Configuration
+evaluation:
+  metrics:
+    - 'accuracy'
+    - 'precision'
+    - 'recall'
+    - 'f1_score'
+    - 'auc_roc'
+  save_plots: true
+  plot_dir: './figures'
+  
+# Logging Configuration
+logging:
+  level: 'INFO'
+  log_file: './logs/training.log'
+  tensorboard_dir: './runs'
