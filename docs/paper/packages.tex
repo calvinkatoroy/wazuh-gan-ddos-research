@@ -1,0 +1,50 @@
+% From The tocbibind package [author: Peter Wilson, Herries Press]:
+% The tocbibind package can be used to add document elements like a 
+% bibliography or an index to the Table of Contents. The package is designed 
+% to work with the four standard book, report, article and proc classes, and to 
+% a limited extent with the ltxdoc class.
+% 
+\usepackage{tocbibind}
+
+%
+% From [Wikipedia]:
+% The package hyperref provides LaTeX the ability to create hyperlinks within 
+% the document. It works with pdflatex and also with standard "latex" used with 
+% dvips and ghostscript or dvipdfm to build a PDF file. For example: 
+%	- \hyperref[mainlemma]{lemma \ref{mainlemma}}
+%	- \url{http://www.wikibooks.org}
+%	- \href{http://www.wikibooks.org}{wikibooks home}
+%	- \href{mailto:my_address@wikibooks.org}{
+%		\nolinkurl{my_address@wikibooks.org}}
+% 
+\usepackage{hyperref}
+  \hypersetup{
+  	colorlinks=false,
+  	pdfborder=0 0 0,
+  	linkcolor=blue,
+  	citecolor=black,
+  	bookmarksopen=false,
+  	bookmarksnumbered=true,
+  	pdfstartview=FitH,
+  	pdfview=FitH
+	}
+
+\usepackage{fancyhdr}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage[pdftex]{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{tikz}
+\usetikzlibrary{backgrounds}
+\usetikzlibrary{shapes,arrows.meta,positioning,fit,calc,backgrounds}
+
+% Algorithm packages (fixed - no conflict)
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+
+\usepackage[numbers,sort]{natbib}
+
+\newcommand{\var}[2]{\newcommand{#1}{#2}}

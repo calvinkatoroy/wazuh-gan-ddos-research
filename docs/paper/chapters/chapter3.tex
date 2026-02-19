@@ -1,0 +1,757 @@
+\section{\chapterthree}
+
+\subsection{System Architecture}
+
+Figure \ref{fig:architecture} illustrates the three-VM GANDD-Bridge architecture. The system segregates attack generation (VM1), detection and analysis (VM2), and security operations management (VM3) to reflect production deployment practices and prevent experimental conflicts of interest.
+
+\textbf{VM1 (Attacker - Kali Linux):} Hosts attack traffic generators including hping3 for baseline attacks and the GAN simulation script for adversarial patterns.
+
+\textbf{VM2 (Victim - Ubuntu):} Deploys Suricata NIDS for signature-based detection, GANDD-Bridge for ML-based behavioral analysis, and Wazuh Agent for log forwarding.
+
+\textbf{VM3 (Manager - Ubuntu):} Operates dedicated Wazuh Manager for centralized log aggregation, rule correlation, and Active Response coordination.
+
+% FIGURE 1: System Architecture (COMPREHENSIVE VERSION)
+% Shows ALL component relationships and data flows
+% Replace your current Figure 1 with this code
+
+\begin{figure*}[t]
+\centering
+\begin{tikzpicture}[
+    node distance=1cm and 2.8cm,
+    component/.style={rectangle, draw, thick, minimum width=2.2cm, minimum height=0.85cm, align=center, font=\small},
+    attacker/.style={component, fill=red!10},
+    victim/.style={component, fill=green!10},
+    manager/.style={component, fill=blue!10},
+    middleware/.style={component, fill=yellow!10},
+    arrow/.style={-{Latex[length=3mm]}, thick},
+    bidir/.style={<->{Latex[length=3mm]}, thick},
+    label/.style={font=\tiny, sloped, above, align=center}
+]
+
+% === VM1: Attacker (Left) ===
+\node[attacker] (hping) {hping3\\(Baseline)};
+\node[attacker, below=0.6cm of hping] (ganscript) {gan\_attack\_sim.py\\(Adversarial)};
+
+% VM1 Label
+\node[above=0.4cm of hping, font=\small\bfseries, text=red!70!black] {VM1: Attacker};
+
+% === VM2: Victim (Center) ===
+\node[victim, right=3cm of hping] (suricata) {Suricata v7.0\\NIDS};
+\node[victim, below=0.6cm of suricata] (agent) {Wazuh Agent};
+\node[victim, below=0.6cm of agent] (gandd) {GANDD-Bridge\\Middleware};
+
+% VM2 Label
+\node[above=0.4cm of suricata, font=\small\bfseries, text=green!60!black] {VM2: Victim};
+
+% === VM3: Manager (Right) ===
+\node[manager, right=3cm of suricata] (wazuhmgr) {Wazuh Manager\\v4.9};
+\node[manager, below=0.6cm of wazuhmgr] (rules) {SIEM Rules\\Engine};
+\node[manager, below=0.6cm of rules] (response) {Active Response\\(firewall-drop)};
+
+% VM3 Label
+\node[above=0.4cm of wazuhmgr, font=\small\bfseries, text=blue!70!black] {VM3: Manager};
+
+% === Bottom: ML Discriminator ===
+\node[middleware, below=1.8cm of gandd] (discriminator) {ML Discriminator\\(Flow Analysis)};
+
+% ============================================
+% === ARROWS: ALL COMPONENT RELATIONSHIPS ===
+% ============================================
+
+% 1. Attack Traffic: VM1 -> Suricata
+\draw[arrow, red, line width=1.8pt, dashed] (ganscript.east) -- node[label, color=red] {Attack Traffic} (suricata.west);
+\draw[arrow, red, line width=1.8pt, dashed] (hping.east) -- node[label, color=red] {Attack Traffic} (suricata.west);
+
+% 2. Suricata Capture: Suricata -> eve.json -> GANDD
+\draw[arrow, green!70!black] (suricata.west) to[out=225, in=135] node[left, font=\tiny] {eve.json} (gandd.west);
+
+% 3. GANDD Analysis: GANDD <-> Discriminator
+\draw[arrow, orange!80!black] (gandd.south) -- node[right, font=\tiny] {Extract Features} (discriminator.north);
+\draw[arrow, orange!80!black] (discriminator.east) -| ++(+0.5,0) |- node[near start, right, font=\tiny] {Anomaly Score} (gandd.east);
+
+% 4. GANDD Alert: GANDD -> Agent
+\draw[arrow, orange!80!black] (gandd.north) -- node[near start, left, font=\tiny] {GANDD Alert} (agent.south);
+
+% 5. Log Forwarding: Agent -> Manager
+\draw[arrow, blue] (agent.east) -- node[below, font=\tiny] {Forward Logs} (wazuhmgr.west);
+
+% 6. Management: Manager <-> Agent (bidirectional)
+\draw[arrow, gray, dotted] (wazuhmgr.west) to[out=180, in=60] node[above, font=\tiny, text=gray] {Manage} (agent.east);
+
+% 7. Rule Processing: Manager -> Rules -> Active Response
+\draw[arrow] (wazuhmgr.south) -- (rules.north);
+\draw[arrow] (rules.south) -- (response.north);
+
+% 8. Active Response: Response -> Agent (firewall commands)
+\draw[arrow, purple, line width=1.5pt, dotted] (response.west) -- ++(-1.5,0) |- node[near end, below, font=\tiny, text=purple] {Block IP (iptables)} (agent.east);
+
+% 9. HTTP Service (implied by victim)
+\node[victim, below=0.6cm of discriminator, minimum width=2.2cm] (http) {HTTP Service (nginx)};
+\draw[arrow, red, dashed] (ganscript.south) |- node[near start, left, font=\tiny, text=red] {HTTP Requests} (http.west);
+\draw[arrow, red, dashed] (hping.west) -- ++(-0.5,0) |- node[near start, left, font=\tiny, text=red] {HTTP Requests} (http.west);
+
+% === IP Address Labels ===
+\node[below=0.05cm of ganscript, font=\tiny, text=gray] {192.168.100.50};
+\node[below=0.05cm of gandd, font=\tiny, text=gray] {192.168.100.100};
+\node[below=0.05cm of response, font=\tiny, text=gray] {192.168.100.10};
+
+% === Network Label ===
+\node[below=0.3cm of http, font=\scriptsize, text=gray] {Network: 192.168.100.0/24 (NAT)};
+
+% === Legend (compact) ===
+\node[right=0cm and 1cm of http, font=\tiny, align=left, text=gray] {
+\textcolor{red}{– – –} Attack \quad
+\textcolor{blue}{—} Detection \quad
+\textcolor{purple}{· · ·} Response \quad
+\textcolor{gray}{· · ·} Manage
+};
+
+\end{tikzpicture}
+\caption{Three-VM GANDD-Bridge System Architecture: VM1 (Attacker) generates attack traffic, VM2 (Victim) performs multi-layer detection (Suricata captures → GANDD-Bridge analyzes → Wazuh Agent forwards), VM3 (Manager) executes rules and coordinates automated response}
+\label{fig:architecture}
+\end{figure*}
+
+\subsubsection{VM1: Attack Infrastructure (Kali Linux 2025.3)}
+
+The attack node is dedicated solely to traffic generation, ensuring no architectural conflicts with defense or monitoring infrastructure:
+
+\begin{itemize}
+    \item \textbf{Attack Traffic Generators:}
+    \begin{itemize}
+        \item \texttt{hping3}: Generates baseline volumetric SYN floods with constant inter-arrival times, fixed packet sizes, and pure SYN flags. Command: \texttt{hping3 -S -p 80 --flood --rand-source 192.168.100.100}
+        
+        \item \texttt{gan\_attack\_sim.py}: Custom Scapy-based script generating adversarial traffic by sampling from probability density functions (PDFs) learned from benign traffic datasets. Models inter-arrival time distributions, packet size distributions, TCP flag frequencies, and header field variations to produce statistically benign-like attack patterns.
+    \end{itemize}
+    
+    \item \textbf{Network Configuration:}
+    \begin{itemize}
+        \item Interface: enp0s3 (NAT bridge)
+        \item IP Address: 192.168.100.50/24
+        \item Gateway: 192.168.100.1
+        \item Target: 192.168.100.100 (Victim VM)
+    \end{itemize}
+\end{itemize}
+
+\textbf{Architectural Rationale:} Separating attack generation from SIEM infrastructure prevents conflicts of interest and enables realistic simulation of external threat actors. The attacker has no access to Wazuh components, ensuring detection metrics reflect true system capabilities.
+
+\textbf{Network Configuration:} VM1 connects to the victim network (192.168.100.0/24) via NAT bridge, simulating external attacker access.
+
+\subsubsection{VM2: Victim Infrastructure (Ubuntu 22.04 LTS)}
+
+The victim endpoint hosts the primary detection and analysis components:
+
+\begin{itemize}
+    \item \textbf{Suricata v7.0:} Network Intrusion Detection System configured with Emerging Threats ruleset. Monitors interface enp0s3 in af-packet mode, capturing flow-level metadata and alerts to \texttt{/var/log/suricata/eve.json} in EVE JSON format.
+    
+    \item \textbf{Wazuh Agent:} Lightweight daemon monitoring multiple log sources:
+    \begin{itemize}
+        \item \texttt{/var/log/suricata/eve.json} (Suricata flow events and alerts)
+        \item \texttt{/var/log/gandd/alerts.log} (GANDD-Bridge ML detections)
+        \item \texttt{/var/log/syslog} (System events)
+    \end{itemize}
+    Forwards events to Wazuh Manager (VM3) over encrypted channel (port 1514).
+    
+    \item \textbf{GANDD-Bridge Middleware:} Python service (\texttt{gandd\_bridge.py}) implementing ML-based anomaly detection:
+    \begin{itemize}
+        \item \textbf{Input:} Tails Suricata eve.json in real-time
+        \item \textbf{Processing:} Extracts 7+ behavioral features (packet count, byte ratio, packet rate, IAT variance, size variance, payload entropy, SYN ratio)
+        \item \textbf{Classification:} Trained Random Forest model classifies flows as benign/malicious
+        \item \textbf{Output:} Writes alerts to \texttt{/var/log/gandd/alerts.log} with timestamp, source IP, and confidence score
+    \end{itemize}
+    
+    \item \textbf{HTTP Service:} Nginx web server listening on port 80, serving static content for service degradation measurement (response time, connection success rate).
+    
+    \item \textbf{Network Configuration:}
+    \begin{itemize}
+        \item Interface: enp0s3
+        \item IP Address: 192.168.100.100/24
+        \item Gateway: 192.168.100.1
+        \item Firewall: iptables configured for Active Response integration
+    \end{itemize}
+\end{itemize}
+
+\textbf{System Resource Monitoring:} The victim runs \texttt{sysstat} for CPU/memory/network metrics collection at 1-second intervals during attacks.
+
+\textbf{Network Configuration:} VM2 operates on 192.168.100.0/24 network, exposed to attack traffic from VM1.
+
+\subsubsection{VM3: Security Operations Center (Ubuntu 22.04 LTS)}
+
+The Wazuh Manager operates on dedicated infrastructure, isolated from both attack and victim endpoints:
+
+\begin{itemize}
+    \item \textbf{Wazuh Manager v4.9:} Centralized SIEM platform providing:
+    \begin{itemize}
+        \item \textbf{Log Aggregation:} Receives events from all Wazuh Agents (VM2) via encrypted TLS connection (port 1514)
+        \item \textbf{Event Normalization:} Converts diverse log formats (Suricata JSON, GANDD custom logs, syslog) into unified event schema
+        \item \textbf{Rule Engine:} Executes detection rules against normalized events, including:
+        \begin{itemize}
+            \item Signature-based Suricata alert correlation
+            \item Custom GANDD alert processing (Rule ID 100200)
+            \item Multi-event correlation rules
+        \end{itemize}
+        \item \textbf{Active Response Coordination:} Triggers automated response scripts on victim endpoints when high-severity alerts fire
+    \end{itemize}
+    
+    \item \textbf{Dashboard Interface:} Web-based monitoring interface (port 443) for real-time alert visualization, agent status monitoring, and rule management.
+    
+    \item \textbf{Active Response Scripts:} Pre-configured automated responses:
+    \begin{itemize}
+        \item \texttt{firewall-drop}: Adds iptables DROP rule on victim VM for attacking source IP
+        \item \texttt{timeout}: Automatic rule expiration after 60 seconds
+        \item \texttt{whitelist}: Prevents accidental blocking of management IP (192.168.100.10)
+    \end{itemize}
+    
+    \item \textbf{Network Configuration:}
+    \begin{itemize}
+        \item Management Interface: enp0s3
+        \item IP Address: 192.168.100.10/24
+        \item Agent Communication: Port 1514 (TLS encrypted)
+        \item Dashboard Access: Port 443 (HTTPS)
+        \item Firewall: Only ports 1514, 443, 22 (SSH) exposed
+    \end{itemize}
+\end{itemize}
+
+\textbf{Architectural Rationale:} Dedicated SIEM infrastructure mirrors production deployment practices where security operations centers operate on hardened, isolated systems. This segregation:
+\begin{itemize}
+    \item Prevents conflicts of interest (attack source $\neq$ monitoring infrastructure)
+    \item Ensures Manager availability even during victim system degradation
+    \item Enables accurate measurement of detection/response latency
+    \item Reflects real-world SOC architecture
+\end{itemize}
+
+\subsection{GANDD-Bridge Workflow}
+
+Algorithm \ref{alg:bridge} details the proposed GANDD-Bridge operational logic:
+
+\begin{algorithm}
+\caption{GANDD-Bridge Detection Algorithm}
+\label{alg:bridge}
+\begin{algorithmic}[1]
+\State \textbf{Input:} Suricata eve.json stream
+\State \textbf{Output:} Alert to wazuh\_gandd.log
+\State
+\Function{MonitorLogs}{}
+    \While{true}
+        \State $event \gets$ ReadNextSuricataEvent()
+        \If{$event.type = \text{``flow''}$}
+            \State $features \gets$ ExtractFeatures($event$)
+            \State $score \gets$ MLDiscriminator.Predict($features$)
+            \If{$score > \theta_{threshold}$}
+                \State GenerateAlert($event$)
+                \State WriteToGANDDLog($event$)
+            \EndIf
+        \EndIf
+    \EndWhile
+\EndFunction
+\State
+\Function{ExtractFeatures}{$event$}
+    \State \textbf{Basic Flow Metrics:}
+    \State $pkt\_count \gets event.flow.pkts\_toserver$
+    \State $byte\_ratio \gets \frac{event.flow.bytes\_toserver}{event.flow.bytes\_toclient+1}$
+    \State $duration \gets event.flow.end - event.flow.start$
+    \State $pkt\_rate \gets \frac{pkt\_count}{duration+1}$
+    \State
+    \State \textbf{Temporal Features:}
+    \State $IAT \gets$ \{inter-arrival times between packets\}
+    \State $iat\_mean \gets \frac{1}{n}\sum IAT_i$
+    \State $iat\_var \gets \frac{1}{n}\sum (IAT_i - iat\_mean)^2$
+    \State
+    \State \textbf{Payload Features:}
+    \State $sizes \gets$ \{packet sizes in flow\}
+    \State $size\_var \gets \text{Variance}(sizes)$
+    \State $payload\_bytes \gets$ concatenated payload data
+    \State $entropy \gets -\sum_{i} p_i \log_2(p_i)$ \Comment{Shannon entropy}
+    \State
+    \State \textbf{Protocol Features:}
+    \State $syn\_count \gets$ number of SYN flags
+    \State $ack\_count \gets$ number of ACK flags
+    \State $syn\_ratio \gets \frac{syn\_count}{pkt\_count}$
+    \State
+    \State \Return $\{pkt\_count, byte\_ratio, pkt\_rate, iat\_var, $
+    \State \hspace{2em} $size\_var, entropy, syn\_ratio\}$
+\EndFunction
+\end{algorithmic}
+\end{algorithm}
+
+The expanded feature set captures multiple attack dimensions:
+
+\begin{itemize}
+    \item \textbf{Volumetric features} (pkt\_count, pkt\_rate) detect high-volume floods
+    \item \textbf{Behavioral features} (iat\_var, syn\_ratio) identify timing and protocol anomalies
+    \item \textbf{Content features} (entropy, size\_var) reveal payload manipulation patterns
+\end{itemize}
+
+This multi-dimensional approach resists evasion attempts that manipulate individual feature categories while leaving others detectable.
+
+\subsection{Experimental Environment}
+
+\subsubsection{Network Topology}
+
+The experimental testbed employs a three-VM configuration connected via VirtualBox NAT network (192.168.100.0/24):
+
+\begin{table}[h]
+\centering
+\caption{Virtual Machine Configuration Summary}
+\label{tab:vm_config}
+\begin{tabular}{llll}
+\toprule
+\textbf{VM} & \textbf{Role} & \textbf{OS} & \textbf{IP Address} \\
+\midrule
+VM1 & Attacker & Kali Linux 2025.3 & 192.168.100.50 \\
+VM2 & Victim & Ubuntu 22.04 LTS & 192.168.100.100 \\
+VM3 & SIEM Manager & Ubuntu 22.04 LTS & 192.168.100.10 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{Traffic Flow:}
+\begin{itemize}
+    \item Attack traffic: VM1 → VM2 (port 80)
+    \item Log forwarding: VM2 (Agent) → VM3 (Manager, port 1514)
+    \item Active Response commands: VM3 → VM2 (secure channel)
+    \item Monitoring access: Researcher → VM3 (Dashboard, port 443)
+\end{itemize}
+
+\textbf{Firewall Rules:}
+\begin{itemize}
+    \item VM1: Outbound traffic allowed to VM2 only
+    \item VM2: Inbound traffic from VM1 (port 80), secure channel to VM3 (port 1514)
+    \item VM3: Inbound from VM2 (port 1514), HTTPS dashboard (port 443), SSH management (port 22)
+\end{itemize}
+
+This topology ensures attack isolation, realistic traffic patterns, and secure management access.
+
+\subsubsection{Hardware Specifications}
+
+Table \ref{tab:hardware} presents the testbed hardware configuration.
+
+\begin{table}[h]
+\centering
+\caption{Testbed Hardware Configuration}
+\label{tab:hardware}
+\begin{tabular}{lll}
+\toprule
+\textbf{Component} & \textbf{Attacker} & \textbf{Victim} \\
+\midrule
+CPU & 4 vCPUs & 4 vCPUs \\
+RAM & 4 GB & 8 GB \\
+OS & Kali Linux 2025.3 & Ubuntu 22.04 \\
+Virtualization & VirtualBox 7.0 & VirtualBox 7.0 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Attack Traffic Profiles}
+
+\subsubsection{Baseline Volumetric Attack}
+
+The baseline attack will be generated using \texttt{hping3} with the following parameters:
+
+\begin{verbatim}
+hping3 -S -p 80 --flood --rand-source <TARGET_IP>
+\end{verbatim}
+
+Expected characteristics:
+\begin{itemize}
+    \item Constant inter-arrival time ($\approx$ 0.0001s)
+    \item Fixed packet size (64 bytes)
+    \item Consistent TCP flags (SYN only)
+    \item Predictable source port allocation
+    \item High packet rate ($>$ 1000 packets/second)
+\end{itemize}
+
+This profile represents traditional volumetric DDoS attacks that should be easily detectable by signature-based systems.
+
+\subsubsection{Adversarial-Style Attack Traffic Generation}
+
+\textbf{GAN-Inspired Methodology:}
+
+While production GAN-based attacks require training generative models on extensive datasets \cite{akana2023}, our experimental setup simulates the statistical properties such attacks would exhibit through probability density function (PDF) sampling. This approach enables controlled, reproducible experimentation while accurately representing the evasive characteristics identified in adversarial attack research \cite{chauhan2020, shieh2022dual, shieh2021synthesis}.
+
+\textbf{Traffic Generation Process:}
+
+The \texttt{gan\_attack\_sim.py} script implements distribution-based traffic synthesis:
+
+\begin{enumerate}
+    \item \textbf{Baseline Data Collection:}
+    
+    A training dataset of 10,000 legitimate HTTP/HTTPS flows is captured during normal network operations over a 24-hour period. For each flow, the following per-packet features are recorded:
+    \begin{itemize}
+        \item Timestamps (microsecond precision) for inter-arrival time calculation
+        \item Packet sizes (header + payload bytes)
+        \item TCP flags (SYN, ACK, SYN-ACK, FIN, RST, PSH)
+        \item IP header fields (TTL, protocol, identification)
+        \item TCP header fields (window size, sequence numbers, options)
+    \end{itemize}
+    
+    \item \textbf{Probability Distribution Modeling:}
+    
+    Statistical distributions are constructed for each feature dimension:
+    
+    \textbf{Inter-Arrival Time (IAT):} Kernel density estimation (KDE) with Gaussian kernel produces continuous probability density function $P_{IAT}(t)$ modeling the temporal spacing between packets. The learned distribution captures both typical inter-packet delays (10-50ms for interactive traffic) and variance patterns.
+    
+    \textbf{Packet Size:} Histogram-based discrete distribution $P_{size}(L)$ over observed payload lengths (0-1500 bytes), preserving the multimodal nature of network traffic (40-byte TCP ACKs, 1500-byte full MTU packets, application-specific sizes).
+    
+    \textbf{TCP Flags:} Empirical frequency distribution $P_{flags}(f)$ extracted from legitimate three-way handshakes and data transfer phases. Captures the natural mix of SYN (3\%), SYN-ACK (3\%), ACK (70\%), PSH-ACK (20\%), FIN (3\%), RST (1\%) observed in benign flows.
+    
+    \textbf{Header Fields:} 
+    \begin{itemize}
+        \item TTL distribution $P_{TTL}(h)$ reflects OS diversity (Windows: 128, Linux: 64, routers: 255, with decrements for network hops)
+        \item Window size distribution $P_{window}(w)$ models TCP flow control (common values: 5840, 14600, 29200, 65535 bytes)
+    \end{itemize}
+    
+    \item \textbf{Attack Traffic Synthesis:}
+    
+    For each attack packet $i$ to be generated:
+    \begin{itemize}
+        \item Sample inter-arrival delay: $\Delta t_i \sim P_{IAT}(t)$ using inverse transform sampling
+        \item Sample packet size: $L_i \sim P_{size}(L)$ from discrete histogram
+        \item Sample TCP flags: $flags_i \sim P_{flags}(f)$ weighted by empirical frequencies
+        \item Sample header values: $TTL_i \sim P_{TTL}$, $window_i \sim P_{window}$
+        \item Maintain target rate (50-100 pps) through adaptive timing while preserving IAT distribution shape
+    \end{itemize}
+    
+    \item \textbf{Statistical Validation:}
+    
+    Generated attack traffic is validated for benign similarity through Kullback-Leibler divergence computation (detailed in Section \ref{sec:metrics}). Success criterion: $D_{KL}(P_{benign} || P_{attack}) < 0.8$ indicates sufficient statistical resemblance to evade signature-based detection.
+\end{enumerate}
+
+\textbf{Key Distinction from Simple Randomization:}
+
+Unlike uniform random sampling (which produces unrealistic, easily detectable patterns), PDF-based generation:
+\begin{itemize}
+    \item \textbf{Preserves natural correlations:} E.g., large packets typically followed by ACKs, SYN packets have specific window sizes
+    \item \textbf{Captures multimodal distributions:} Benign traffic exhibits peaks at specific packet sizes (40, 576, 1500 bytes); uniform sampling misses this
+    \item \textbf{Maintains temporal realism:} IAT distribution includes both frequent short delays and occasional long delays, matching application behavior
+    \item \textbf{Reflects OS/application fingerprints:} TTL and window size distributions mirror legitimate endpoint diversity
+\end{itemize}
+
+This methodology produces attack traffic that exhibits measurable statistical similarity to benign flows (validated through KL divergence $< 0.8$) while maintaining malicious intent through sustained SYN flooding at rates designed to exhaust victim connection tables (50-100 new connections/second over 5-minute duration).
+
+\textbf{Implementation:} The script leverages NumPy for distribution sampling (\texttt{numpy.random.choice} for discrete distributions, \texttt{scipy.stats.gaussian\_kde} for continuous KDE), Scapy for packet construction and transmission, and maintains a sliding window rate limiter to ensure target transmission rate without violating learned temporal patterns.
+
+\label{sec:adversarial_attack}
+
+\subsection{Configuration Details}
+
+\subsubsection{Suricata Configuration}
+
+The Suricata configuration (\texttt{suricata.yaml}) has been modified to ensure comprehensive event logging:
+
+\begin{verbatim}
+af-packet:
+  - interface: enp0s3
+    threads: 2
+    defrag: yes
+    cluster-type: cluster_flow
+    
+outputs:
+  - eve-log:
+      enabled: yes
+      filetype: regular
+      filename: eve.json
+      types:
+        - flow
+        - alert
+        - http
+        - dns
+\end{verbatim}
+
+The configuration prioritizes flow-level metadata collection, which provides the feature space for ML-based anomaly detection.
+
+\subsubsection{Wazuh Custom Rules}
+
+Custom detection rules have been configured in \texttt{/var/ossec/etc/rules/local\_rules.xml}:
+
+\begin{verbatim}
+<group name="gandd,attack,">
+  <rule id="100200" level="12">
+    <match>GANDD_ALERT</match>
+    <description>GANDD: ML Model Detected 
+      Synthetic Attack Pattern</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+  </rule>
+</group>
+\end{verbatim}
+
+Rule 100200 triggers when the GANDD-Bridge writes alerts to the monitored log file, enabling integration with existing Wazuh alert infrastructure.
+
+\subsubsection{Active Response Configuration}
+
+Active Response has been configured in \texttt{ossec.conf} on the Wazuh Manager:
+
+\begin{verbatim}
+<active-response>
+  <command>firewall-drop</command>
+  <location>local</location>
+  <rules_id>100200</rules_id>
+  <timeout>60</timeout>
+</active-response>
+
+<global>
+  <white_list>192.168.100.10</white_list>
+</global>
+\end{verbatim}
+
+This configuration ensures that when Rule 100200 fires, the attacking IP is automatically blocked via \texttt{iptables} for 60 seconds. The whitelist prevents accidental blocking of the Manager itself.
+
+\subsection{Experimental Design: Comparative Evaluation}
+
+Figure \ref{fig:workflow} illustrates the complete experimental workflow, showing the sequential interaction between the attacker node (VM1), victim endpoint (VM2), and the SIEM core components throughout the detection and response cycle.
+
+% FIGURE 2: Experimental Workflow (IMPROVED VERSION)
+% Fixes: (1) Simplified VM1 attacker flow, (2) Header shows "VM3: Manager"
+% Replace your current Figure 2 with this code
+
+\begin{figure*}[htbp]
+\centering
+\begin{tikzpicture}[
+    node distance=0.8cm and 1.5cm,
+    box/.style={rectangle, draw, thick, minimum width=2.2cm, minimum height=0.7cm, align=center, font=\scriptsize},
+    attacker/.style={box, fill=red!10},
+    victim/.style={box, fill=green!10},
+    siem/.style={box, fill=blue!10},
+    decision/.style={diamond, draw, thick, aspect=2, minimum width=1.5cm, minimum height=0.8cm, align=center, font=\scriptsize, fill=yellow!10},
+    arrow/.style={-{Latex[length=2.5mm]}, thick},
+    label/.style={font=\tiny, align=center}
+]
+
+% === Column Headers (UPDATED: VM3 instead of "SIEM Core") ===
+\node[font=\small\bfseries, text=red!70!black] at (0, 0) {VM1: Attacker};
+\node[font=\small\bfseries, text=green!60!black] at (4.5, 0) {VM2: Victim};
+\node[font=\small\bfseries, text=blue!70!black] at (9, 0) {VM3: Manager};
+
+% === VM1 Column (Attacker) - SIMPLIFIED FLOW ===
+\node[attacker] (start) at (0, -0.8) {Start\\Experiment};
+\node[attacker, below=of start] (prepare) {Prepare\\Attack Script};
+\node[attacker, below=of prepare] (launch) {Launch Attack\\(hping3/Scapy)};
+\node[attacker, below=of launch] (send) {Send Malicious\\Packets\\(5 minutes)};
+\node[attacker, below=2.5cm of send] (stop) {Attack\\Stopped};
+
+% === VM2 Column (Victim) ===
+\node[victim] (receive) at (4.5, -3.2) {Receive Traffic\\at NIC};
+\node[victim, below=of receive] (suricata) {Suricata\\Captures};
+\node[victim, below=of suricata] (evejson) {Write to\\eve.json};
+\node[victim, below=of evejson] (gandd) {GANDD Bridge\\Analyzes};
+\node[decision, below=1.2cm of gandd] (anomaly) {Anomaly?};
+\node[victim, below=1.2cm of anomaly] (writealert) {Write\\GANDD Alert};
+\node[victim, below=of writealert] (forward) {Agent\\Forwards};
+
+% === VM3 Column (Manager) ===
+\node[siem] (manager) at (9, -9.6) {Wazuh Manager\\Rule 100200};
+\node[siem, below=of manager] (activeresponse) {Active Response\\firewall-drop};
+
+% === Background: Highlight GANDD Components ===
+\begin{pgfonlayer}{background}
+    \node[draw=orange, line width=2pt, dashed, rounded corners,
+          fit={(gandd) (anomaly) (writealert)},
+          inner sep=0.4cm,
+          fill=orange!8,
+          label={[font=\scriptsize, text=orange!70!black]above:Config B Only}] {};
+\end{pgfonlayer}
+
+% === Arrows ===
+
+% VM1 vertical flow (SIMPLIFIED - no "blocked?" decision)
+\draw[arrow] (start) -- (prepare);
+\draw[arrow] (prepare) -- (launch);
+\draw[arrow] (launch) -- (send);
+\draw[arrow] (send) -- node[right, label] {Time\\Elapsed} (stop);
+
+% Attack traffic: VM1 -> VM2
+\draw[arrow, red, line width=1.5pt, dashed] (send.east) -- node[near start, above, label, text=red] {Attack} (receive.west);
+
+% VM2 vertical flow
+\draw[arrow] (receive) -- (suricata);
+\draw[arrow] (suricata) -- (evejson);
+\draw[arrow] (evejson) -- (gandd);
+\draw[arrow] (gandd) -- (anomaly);
+\draw[arrow] (anomaly) -- node[near start, right, label] {Yes} (writealert);
+\draw[arrow] (writealert) -- (forward);
+
+% VM2 -> VM3 (Alert forwarding)
+\draw[arrow, green!60!black] (forward.east) -| ++(1,0) |- node[near start, left, label] {Alert} (manager.west);
+
+% VM3 vertical flow
+\draw[arrow] (manager) -- (activeresponse);
+
+% VM3 -> VM2 (Active Response blocking)
+\draw[arrow, purple, line width=1.5pt, dotted] (activeresponse.west) -- ++(-5.5,0) |- node[near end, above, label, text=purple] {Block\\IP} (receive.west);
+
+% Decision "No" loop (anomaly detection)
+\draw[arrow, red] (anomaly.west) -- ++(-0.8,0) |- node[near start, right, label, text=red] {No} (gandd.west);
+
+% === Legend ===
+\node[below=1.5cm of stop, font=\tiny, align=left] {
+    \textcolor{red}{- - -} Attack traffic \quad
+    \textcolor{green!60!black}{—} Detection flow \quad
+    \textcolor{purple}{· · ·} Response\\
+    \textcolor{orange}{\fbox{\quad}} GANDD components (Config B only)
+};
+
+\end{tikzpicture}
+\caption{Experimental workflow across three-VM architecture. VM1 (Attacker) initiates attacks, VM2 (Victim) performs detection through Suricata and optionally GANDD-Bridge, VM3 (Manager) aggregates alerts and triggers Active Response. GANDD-Bridge components are active only in Configuration B (With GANDD).}
+\label{fig:workflow}
+\end{figure*}
+
+To directly address the research question of GANDD-Bridge effectiveness, we employ a $2 \times 3$ experimental design comparing two system configurations across three attack types. This matrix design enables direct measurement of GANDD integration benefits while controlling for attack variables.
+
+\subsubsection{System Configurations Under Test}
+
+This study compares two distinct system states to isolate the impact of ML integration:
+\begin{itemize}
+    \item \textbf{Configuration A (Baseline):} A standard Wazuh v4.9 and Suricata v7.0 deployment using default signature-based rules and threshold-driven Active Response.
+    \item \textbf{Configuration B (Enhanced):} The baseline configuration augmented with the GANDD-Bridge middleware, utilizing a Random Forest discriminator and extended behavioral features.
+\end{itemize}
+
+\subsubsection{Attack Profiles Tested}
+
+Three attack vectors are deployed from VM1 to evaluate detection capabilities across a sophistication spectrum:
+\begin{itemize}
+    \item \textbf{Type 1: Volumetric Flood:} High-rate SYN flood ($>$1000 pps) with static headers and constant inter-arrival times.
+    \item \textbf{Type 2: Low-Rate Evasive:} Rate-limited SYN flood (50-100 pps) designed to stay below default signature thresholds.
+    \item \textbf{Type 3: Adversarial-Style Evasive:} Sophisticated attack utilizing PDF-based sampling (as detailed in Section \ref{sec:adversarial_attack}). Features such as $\Delta t$, packet size, and TCP flags are derived from benign traffic distributions using KDE to maximize statistical similarity ($D_{KL} < 0.8$).
+\end{itemize}
+
+\subsubsection{Experimental Design Matrix}
+
+The $2 \times 3$ matrix (Table \ref{tab:exp_matrix}) defines the experimental scenarios. Each cell involves 15 independent 5-minute trials to ensure statistical significance.
+
+\begin{table}[h]
+\centering
+\caption{$2 \times 3$ Experimental Design Matrix}
+\label{tab:exp_matrix}
+\resizebox{\columnwidth}{!}{% % Menyesuaikan tabel dengan lebar kolom
+\begin{tabular}{lccc}
+\toprule
+\textbf{Configuration} & \textbf{Type 1 (Volumetric)} & \textbf{Type 2 (Low-Rate)} & \textbf{Type 3 (Adversarial)} \\
+\midrule
+A: Without GANDD & Scenario 1A (Baseline) & Scenario 2A (Gap Emerges) & Scenario 3A (Gap Widens) \\
+B: With GANDD & Scenario 1B (Validation) & Scenario 2B (Improvement) & Scenario 3B (Major Benefit) \\
+\bottomrule
+\end{tabular}%
+}
+\end{table}
+
+\subsubsection{Experimental Procedure}
+
+Each of the 90 total trials follows a four-phase execution lifecycle:
+\begin{itemize}
+    \item \textbf{Setup:} System reset, background resource monitoring start, and 2-minute benign baseline recording.
+    \item \textbf{Attack:} 5-minute attack injection. Collection of alert timestamps, rule IDs, and Nginx service response metrics.
+    \item \textbf{Mitigation:} Verification of \textit{firewall-drop} execution and measurement of Time-to-Block (TTB).
+    \item \textbf{Recovery:} Attack cessation, service recovery measurement, and log export for offline analysis.
+\end{itemize}
+
+\subsubsection{Evaluation and Statistical Analysis Framework}
+
+To quantify the integration benefits, we employ Delta Metrics ($\Delta$) and statistical validation:
+
+\begin{itemize}
+    \item \textbf{Primary Metrics:}
+    \begin{itemize}
+        \item \textbf{Detection Rate Improvement:} $\Delta DR_i = DR_{With}^i - DR_{Without}^i$.
+        \item \textbf{Latency Change:} $\Delta Lat_i = Lat_{With}^i - Lat_{Without}^i$.
+        \item \textbf{FPR Change:} $\Delta FPR_i = FPR_{With}^i - FPR_{Without}^i$.
+    \end{itemize}
+    \item \textbf{Statistical Validation:} Scenario pairs (e.g., 3A vs 3B) are compared using a \textbf{paired t-test} ($\alpha = 0.05$) to assess significance. \textbf{Cohen’s d} is calculated to measure the effect size, with $d > 0.8$ representing a large practical impact.
+\end{itemize}
+
+\subsection{Evaluation Metrics}
+
+System performance will be assessed using the following metrics:
+
+\begin{itemize}
+    \item \textbf{Detection Rate (DR):} $DR = \frac{TP}{TP + FN}$ where TP = true positives (attacks correctly detected), FN = false negatives (attacks missed)
+    
+    \item \textbf{False Positive Rate (FPR):} $FPR = \frac{FP}{FP + TN}$ where FP = false positives (benign traffic flagged as attacks), TN = true negatives (benign traffic correctly classified)
+    
+    \item \textbf{Detection Latency:} Time elapsed from attack initiation to alert generation in Wazuh Manager logs
+    
+    \item \textbf{Mitigation Effectiveness:} Percentage of attack traffic successfully blocked post-detection via Active Response firewall rules
+    
+    \item \textbf{Resource Overhead:} CPU utilization, RAM consumption, and disk I/O with and without GANDD-Bridge deployment
+\end{itemize}
+
+\label{sec:metrics}
+
+\subsection{Data Collection and Analysis Plan}
+
+\subsubsection{Data to be Collected}
+
+For each experimental trial, we will collect:
+\begin{itemize}
+    \item Wazuh alert logs with precise timestamps
+    \item Suricata flow records (\texttt{eve.json})
+    \item GANDD-Bridge detection events (Scenario 3 only)
+    \item System resource metrics (CPU, RAM, disk I/O)
+    \item Network packet captures via Wireshark for ground truth validation
+    \item Active Response firewall logs
+\end{itemize}
+
+\subsubsection{Analysis Methods}
+
+Collected data will be analyzed using:
+\begin{itemize}
+    \item \textbf{Statistical Analysis:} Calculate mean and standard deviation of detection latency across trials
+    \item \textbf{Classification Performance:} Generate confusion matrices showing true/false positives/negatives
+    \item \textbf{Time-Series Analysis:} Examine resource consumption patterns during attack and normal operation
+    \item \textbf{Comparative Analysis:} Compare detection rates and latency across the three scenarios using paired t-tests
+\end{itemize}
+
+\subsection{Implementation Status and Timeline}
+
+\subsubsection{Completed Components}
+
+The following components have been designed and implemented:
+
+\begin{itemize}
+    \item Testbed infrastructure with network isolation
+    \item Wazuh Manager and Agent deployment
+    \item Suricata NIDS configuration and rule updates
+    \item Attack traffic generation scripts (both \texttt{hping3} and GAN-simulated)
+    \item GANDD-Bridge middleware implementation
+    \item Custom Wazuh detection rules and Active Response configuration
+\end{itemize}
+
+\subsubsection{Pending Work}
+
+The experimental phase will commence upon approval of this methodology, with the following timeline:
+
+\begin{itemize}
+    \item \textbf{Week 1:} Execute Scenario 1 trials (baseline detection)
+    \item \textbf{Week 2:} Execute Scenario 2 trials (GAN evasion)
+    \item \textbf{Week 3:} Execute Scenario 3 trials (GANDD defense)
+    \item \textbf{Week 4:} Data analysis, statistical validation, and results compilation
+\end{itemize}
+
+All experimental data, configurations, and scripts will be made available in an open-source repository to enable reproducibility and community validation.
+
+\subsection{Expected Limitations and Mitigation}
+
+\subsubsection{Experimental Constraints}
+
+We acknowledge the following limitations:
+
+\begin{itemize}
+    \item \textbf{Scale:} Single-host victim may not capture enterprise network complexity; however, this provides controlled environment for proof-of-concept
+    \item \textbf{Traffic Realism:} GAN-simulated script mimics statistical properties but may not capture all real-world GAN artifacts
+    \item \textbf{Dataset:} ML model trained on limited benign traffic samples; production deployment would require extensive training data
+\end{itemize}
+
+\subsubsection{Mitigation Strategies}
+
+To address these limitations:
+
+\begin{itemize}
+    \item Clearly document scope boundaries in results section
+    \item Validate GAN-simulated traffic against published GAN characteristics
+    \item Discuss dataset limitations and recommend data collection procedures for production deployment
+    \item Propose future work scaling to multi-host and distributed scenarios
+\end{itemize}
+
+\subsection{Ethical Considerations}
+
+All experimental activities are confined to isolated laboratory environments with no connection to production networks. Attack traffic generation is strictly limited to authorized testbed systems. This research involves no human subjects, and all data collection is limited to synthetic traffic patterns and system performance metrics. Upon publication, all source code and configurations will be released under an open-source license with clear documentation on responsible use.

@@ -1,0 +1,28 @@
+\section{\chaptertwo}
+
+\subsection{Adversarial Attack Generation}
+
+The offensive application of GANs to network security has gained significant attention. Chauhan and Heydari \citep{chauhan2020} pioneered the concept of polymorphic adversarial DDoS, demonstrating that GANs can synthesize traffic that evades traditional IDS systems through dynamic feature manipulation. Their work established the theoretical foundation for adversarial traffic generation but lacked practical SIEM integration analysis.
+
+Akana et al. \citep{akana2023} extended this research by employing Deep Convolutional GANs (DCGANs) to generate optimized DDoS patterns with enhanced realism. Their approach achieved 92\% similarity to legitimate traffic patterns, significantly challenging detection systems. However, their evaluation focused primarily on signature-based IDS rather than comprehensive SIEM platforms.
+
+Shieh et al. \citep{shieh2022dual,shieh2021synthesis} investigated advanced GAN architectures including dual-discriminator models and Wasserstein GAN variants to produce more stable adversarial traffic. Their research demonstrated that different GAN architectures yield varying levels of evasion capability, with WGAN-GP showing superior performance in maintaining traffic distribution coherence.
+
+\subsection{ML-Based DDoS Defense}
+
+On the defensive frontier, Goud and Giduturi \citep{goud2024} proposed CyberGuard, an ensemble approach combining Wasserstein GANs with CNN-GRU architectures for adversarial DDoS detection in Software-Defined Networking (SDN) environments. Their system achieved 97.3\% accuracy but required extensive computational resources unsuitable for resource-constrained SIEM deployments.
+
+Recent work by Kumar et al. \citep{kumar2021} explored hybrid detection systems combining signature-based and anomaly-based approaches. However, these studies typically assume greenfield deployments rather than integration with existing SIEM infrastructure, a critical gap our research addresses.
+
+\subsection{Research Gap}
+
+While prior work has explored both adversarial attack generation and ML-based defense mechanisms independently, limited research has examined:
+
+\begin{itemize}
+    \item Practical integration of ML-based detection with production SIEM platforms
+    \item Quantitative comparison of detection effectiveness across attack types
+    \item Real-time response mechanisms triggered by hybrid detection systems
+    \item Performance overhead and deployment considerations for operational environments
+\end{itemize}
+
+Our work bridges these gaps through practical implementation and comprehensive evaluation.

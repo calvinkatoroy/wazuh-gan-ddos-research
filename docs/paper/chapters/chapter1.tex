@@ -1,0 +1,121 @@
+\section{\chapterone}
+
+\subsection{Background and Motivation}
+
+Security Information and Event Management (SIEM) systems serve as the cornerstone of modern cybersecurity infrastructure, providing centralized visibility into security events across distributed networks. Wazuh, a prominent open-source SIEM platform, employs rule-based detection mechanisms and signature matching to identify anomalies and known attack patterns. While this approach demonstrates effectiveness against conventional distributed denial of service (DDoS) attacks, the emergence of adversarial machine learning techniques poses unprecedented challenges to traditional security paradigms.
+
+Generative Adversarial Networks (GANs), originally developed for synthetic data generation, have been weaponized to craft network traffic that statistically mimics legitimate patterns. When applied to DDoS attack scenarios, GANs can produce low-noise, temporally-variable traffic engineered specifically to evade static detection thresholds. This capability creates a critical blind spot in rule-based SIEM architectures, as attacks can successfully consume target resources while remaining invisible to signature-based detection systems.
+
+\subsection{Theoretical Foundation}
+
+This research builds upon three foundational concepts: Security Information and Event Management (SIEM) systems, Generative Adversarial Networks (GANs), and network-layer Distributed Denial of Service (DDoS) attacks.
+
+\subsubsection{SIEM Architecture and Detection Mechanisms}
+
+Security Information and Event Management systems aggregate security telemetry from distributed sources (network devices, endpoints, applications) into a centralized platform for correlation and analysis \cite{kumar2021}. Wazuh, an open-source SIEM, employs a three-tier architecture:
+
+\begin{itemize}
+    \item \textbf{Agents:} Lightweight daemons deployed on monitored endpoints that collect local logs and forward to the Manager
+    \item \textbf{Manager:} Central correlation engine that normalizes heterogeneous log formats into unified events, applies detection rules through pattern matching, and triggers automated responses
+    \item \textbf{Indexer:} Storage and search backend (OpenSearch/Elasticsearch-compatible) enabling historical analysis and forensic investigation
+\end{itemize}
+
+Detection in Wazuh operates through signature-based rules that match event patterns against known attack indicators. For example, a DDoS detection rule might trigger when packet count from a single source exceeds 100 packets/second within a 5-second window. The normalization process converts disparate log formats (syslog, JSON, Windows Event Logs) into standardized fields, enabling cross-source correlation. While computationally efficient ($O(1)$ rule matching per event), signature-based detection suffers from two fundamental limitations: (1) inability to detect novel attacks lacking signatures, and (2) vulnerability to evasion through threshold manipulation.
+
+\subsubsection{Generative Adversarial Networks}
+
+Generative Adversarial Networks, introduced by Goodfellow et al. (2014), consist of two competing neural networks trained through adversarial competition \cite{chauhan2020}:
+
+\begin{itemize}
+    \item \textbf{Generator (G):} Learns to produce synthetic data samples that mimic the distribution of real training data. Given random noise $z \sim p_z(z)$, the generator produces samples $G(z)$ intended to be statistically indistinguishable from real data $x \sim p_{data}(x)$. The generator's parameters $\theta_g$ are optimized to maximize the discriminator's classification error.
+    
+    \item \textbf{Discriminator (D):} Binary classifier trained to distinguish real samples ($x$) from generated samples ($G(z)$). Outputs probability $D(x) \in [0,1]$ that input is real. The discriminator's parameters $\theta_d$ are optimized to correctly classify both real and fake samples.
+\end{itemize}
+
+The networks train through adversarial competition defined by the minimax objective:
+
+\begin{equation}
+\min_{G} \max_{D} \mathbb{E}_{x \sim p_{data}}[\log D(x)] + \mathbb{E}_{z \sim p_z}[\log(1 - D(G(z)))]
+\end{equation}
+
+The Discriminator attempts to maximize this objective (correctly classifying real as 1, fake as 0), while the Generator attempts to minimize it (fooling the discriminator into classifying $G(z)$ as real). This minimax game converges when generated samples become statistically indistinguishable from real data, i.e., $D(G(z)) = 0.5$ for all $z$.
+
+In the context of adversarial attacks, an attacker can train a GAN on benign network traffic to learn legitimate behavioral patterns (inter-arrival time distributions, packet size distributions, protocol sequences). The trained Generator can then produce attack traffic that maintains malicious intent (resource consumption, service degradation) while exhibiting statistical properties that evade signature-based detection \cite{akana2023, shieh2022dual}. This represents a fundamental challenge for rule-based SIEMs: the attack is real (causes damage) yet invisible (statistically benign).
+
+\subsubsection{Network-Layer DDoS Attack Mechanics}
+
+Distributed Denial of Service attacks exploit protocol vulnerabilities and resource limitations to degrade service availability \cite{goud2024}. SYN flood attacks, the focus of this research, target the TCP three-way handshake mechanism:
+
+\begin{enumerate}
+    \item \textbf{SYN:} Client sends SYN packet to server requesting connection establishment
+    \item \textbf{SYN-ACK:} Server allocates resources (memory for connection state, typically 512-1024 bytes) and responds with SYN-ACK packet
+    \item \textbf{ACK (or timeout):} Legitimate client completes handshake with ACK packet; attacker never sends final ACK, leaving connection half-open
+\end{enumerate}
+
+By flooding the target with SYN packets using spoofed source addresses, attackers force servers to maintain thousands of half-open connections in SYN\_RECEIVED state. Once the connection table (typically 1024-65535 entries depending on OS configuration) is exhausted, legitimate users cannot establish new connections, effectively denying service. Connection states timeout after 30-120 seconds, but attackers sustain the flood to maintain table saturation.
+
+\textbf{Detection Challenges:} Traditional volumetric SYN floods ($>$ 1000 packets/second from single source) are easily detected by rate-based signatures. However, sophisticated variants exhibit three evasive properties:
+
+\begin{itemize}
+    \item \textbf{Low-Rate:} Operating below detection thresholds (50-100 pps per source) while distributing across multiple sources to achieve aggregate impact
+    \item \textbf{Temporal Variance:} Randomizing inter-arrival times to avoid fixed-rate patterns that trigger state-machine-based detection
+    \item \textbf{Protocol Mimicry:} Including legitimate-looking SYN-ACK and ACK packets mixed with SYN floods to resemble normal handshake patterns
+\end{itemize}
+
+The integration of GAN-generated traffic patterns with DDoS attacks creates adversarial scenarios where attack traffic statistically resembles benign patterns (temporal variance, size distributions, flag combinations) while still causing measurable service degradation (increased response time, connection failures, resource exhaustion). This fundamental tension—evasive yet effective—motivates the need for behavioral anomaly detection that transcends simple signature matching and analyzes flow-level features (packet rate distributions, byte ratio imbalances, protocol state violations) to identify malicious intent despite surface-level legitimacy.
+
+\subsection{Problem Statement}
+
+Current SIEM platforms, including Wazuh, face a significant detection gap when confronting AI-enhanced threats. Traditional signature-based detection relies on fixed thresholds and known attack patterns, which can be systematically bypassed by adversarial machine learning techniques. This vulnerability presents serious risks:
+
+\begin{itemize}
+    \item \textbf{Evasion Capability:} GAN-generated DDoS traffic can evade signature-based detection by mimicking benign traffic patterns while still degrading system performance
+    \item \textbf{Static Thresholds:} Rule-based systems rely on fixed packet rate thresholds that sophisticated attacks can stay below
+    \item \textbf{Limited Adaptability:} Traditional SIEMs lack the ability to detect novel attack patterns without manual rule updates
+\end{itemize}
+
+The central research question is: \textit{Can integrating machine learning-based anomaly detection with existing SIEM platforms effectively close this detection gap without requiring wholesale infrastructure replacement?}
+
+\subsection{Research Objectives}
+
+This research addresses three primary objectives centered on evaluating GANDD-Bridge integration effectiveness:
+
+\begin{enumerate}
+    \item \textbf{Establish Detection Baseline:} Quantify standard Wazuh detection performance against volumetric, low-rate, and adversarial-style DDoS attacks to establish the detection gap that motivates ML integration. This baseline represents current production SIEM capabilities without ML augmentation.
+    
+    \item \textbf{Design and Implement GANDD-Bridge:} Develop a middleware architecture that augments Wazuh with ML-based behavioral anomaly detection using expanded feature sets (inter-arrival time variance, payload entropy, protocol distributions) while maintaining compatibility with existing SIEM infrastructure and minimizing operational overhead.
+    
+    \item \textbf{Quantify Integration Benefit:} Through systematic comparative evaluation across attack types, measure the detection effectiveness improvement, latency impact, and false positive rate changes when deploying GANDD-Bridge alongside standard Wazuh versus Wazuh alone. Demonstrate statistically significant improvement attributable to ML integration.
+\end{enumerate}
+
+\textbf{Central Research Question:} Does integrating GANDD-Bridge with Wazuh provide statistically significant detection improvement against evasive attacks compared to standard rule-based SIEM operation, while maintaining acceptable operational performance in terms of latency, false positive rates, and resource consumption?
+
+\subsection{Research Contributions}
+
+Upon completion, this research will contribute:
+
+\begin{enumerate}
+    \item \textbf{First Systematic With/Without Comparison:} Empirical comparison quantifying detection rate improvements when augmenting production SIEM (Wazuh) with ML-based behavioral detection (GANDD-Bridge) across attack sophistication spectrum (volumetric, low-rate, and adversarial attacks). Provides evidence-based rationale for ML integration investment decisions.
+    
+    \item \textbf{Practical Integration Architecture:} Design and implementation of GANDD-Bridge middleware demonstrating feasible ML integration without requiring infrastructure replacement. Addresses real-world deployment constraints through lightweight Python implementation targeting small-to-medium networks.
+    
+    \item \textbf{Multi-Dimensional Performance Analysis:} Comprehensive evaluation quantifying both benefits (detection rate improvements) and costs (latency impact, CPU overhead, false positive rate changes), enabling informed deployment decisions with full trade-off visibility.
+    
+    \item \textbf{Statistical Validation Framework:} Methodology for validating traffic realism (KL divergence $<$ 0.8) and integration effectiveness (paired t-tests, Cohen's d effect sizes), establishing reproducible evaluation standards for future SIEM-ML integration research.
+    
+    \item \textbf{Open Source Reference Implementation:} Release of GANDD-Bridge prototype, experimental scripts, attack simulators, and complete configurations enabling community validation and practical adoption by security practitioners.
+\end{enumerate}
+
+\textbf{Primary Contribution:} This work provides the first controlled experimental evidence quantifying the detection gap between standard rule-based SIEMs and ML-augmented SIEMs when facing adversarial-style attacks, with explicit measurement of GANDD-Bridge integration benefits and costs.
+
+\subsection{Research Scope}
+
+This study focuses specifically on:
+\begin{itemize}
+    \item TCP-based DDoS attacks (primarily SYN floods)
+    \item Wazuh SIEM platform (v4.9) with Suricata NIDS integration
+    \item GAN-simulated attack traffic characteristics
+    \item Virtualized testbed environments (Kali Linux and Ubuntu)
+\end{itemize}
+
+The research explicitly excludes application-layer attacks, distributed multi-vector scenarios, and production network deployments, which are reserved for future work. Our focus remains on establishing proof-of-concept for the GANDD-Bridge architecture and demonstrating its effectiveness in controlled laboratory conditions.
