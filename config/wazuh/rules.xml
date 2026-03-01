@@ -1,0 +1,44 @@
+<!-- GANDD-Bridge custom Wazuh rules
+     Deploy to: /var/ossec/etc/rules/local_rules.xml  (on VM3 Wazuh Manager)
+     Blue Team component — Calvin Wirathama Katoroy (2306242395)
+-->
+<group name="gandd,ddos,attack,">
+
+  <!-- ── Primary GANDD alert rule ───────────────────────────────────────────
+       Fires whenever GANDD-Bridge writes a GANDD_ALERT line.
+       Level 12 ensures Active Response (firewall-drop) is triggered.
+  -->
+  <rule id="100200" level="12">
+    <match>GANDD_ALERT</match>
+    <description>GANDD-Bridge: ML discriminator detected synthetic/adversarial DDoS pattern</description>
+    <mitre>
+      <id>T1498</id>
+      <id>T1499</id>
+    </mitre>
+    <group>attack,ddos,ml_detection,</group>
+  </rule>
+
+  <!-- ── High-confidence alert (confidence >= 0.90) ────────────────────────
+       Level 15 for immediate escalation.
+  -->
+  <rule id="100201" level="15">
+    <if_sid>100200</if_sid>
+    <match>confidence=0\.9[0-9]</match>
+    <description>GANDD-Bridge: High-confidence adversarial DDoS (confidence >= 0.90)</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+    <group>attack,ddos,ml_detection,high_confidence,</group>
+  </rule>
+
+  <!-- ── GANDD alert with source IP extraction ─────────────────────────────
+       Extracts the attacking source IP for Active Response.
+  -->
+  <rule id="100202" level="12">
+    <if_sid>100200</if_sid>
+    <regex>src_ip=(\S+)</regex>
+    <description>GANDD-Bridge: Attack source IP identified for automated blocking</description>
+    <group>attack,ddos,ml_detection,firewall_block,</group>
+  </rule>
+
+</group>
