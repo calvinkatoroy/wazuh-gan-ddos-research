@@ -42,3 +42,42 @@
   </rule>
 
 </group>
+
+<group name="suricata,ddos,attack,">
+
+  <!-- ── Suricata baseline DDoS detection ──────────────────────────────────
+       Matches ET DROP and high-priority Suricata alerts forwarded via eve.json.
+       Level 12 triggers active response (firewall-drop).
+  -->
+  <rule id="100210" level="12">
+    <if_sid>86601</if_sid>
+    <match>ET DROP</match>
+    <description>Suricata: DDoS flood traffic detected (ET DROP)</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+    <group>attack,ddos,ids_alert,firewall_block,</group>
+  </rule>
+
+  <rule id="100211" level="12">
+    <if_sid>86601</if_sid>
+    <field name="alert.category">Attempted Denial of Service</field>
+    <description>Suricata: Attempted DoS attack detected</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+    <group>attack,ddos,ids_alert,firewall_block,</group>
+  </rule>
+
+  <rule id="100212" level="12">
+    <if_sid>86601</if_sid>
+    <field name="alert.category">Misc Attack</field>
+    <field name="alert.severity">1|2</field>
+    <description>Suricata: High-priority misc attack (priority 1 or 2)</description>
+    <mitre>
+      <id>T1498</id>
+    </mitre>
+    <group>attack,ddos,ids_alert,firewall_block,</group>
+  </rule>
+
+</group>
