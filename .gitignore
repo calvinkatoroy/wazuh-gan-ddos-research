@@ -86,3 +86,4 @@ temp/
 secrets/
 
 nul
+config/suricata/suricata.rules

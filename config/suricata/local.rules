@@ -1,0 +1,1 @@
+alert tcp 192.168.100.50 any -> 192.168.100.100 80 (msg:"Local SYN Flood from Attacker"; flags:S,12; flow:to_server,stateless; sid:9000001; rev:3;)
