@@ -204,10 +204,12 @@ class GANDDBridge:
         model_path: str   = MODEL_PATH,
         threshold:  float = THRESHOLD,
     ):
-        self.eve_log      = eve_log
+        self.eve_log       = eve_log
         self.discriminator = RFDiscriminator(model_path, threshold)
         self.alert_writer  = AlertWriter(alert_log)
         self.logger        = logging.getLogger("gandd")
+        self._alerted: dict[str, float] = {}   # src_ip -> last alert timestamp
+        self._cooldown     = 60.0              # seconds — matches AR block timeout
 
     # ── eve.json tail ─────────────────────────────────────────────────────────
 
@@ -249,11 +251,21 @@ class GANDDBridge:
             if event.get("proto") not in ("TCP", "UDP"):
                 continue
 
+            # Skip single-packet flows — legitimate timeout flows (e.g. failed
+            # TCP handshakes) are always pkt_count=1 and cause heuristic FPs
+            if int(event.get("flow", {}).get("pkts_toserver", 0)) < 2:
+                continue
+
             stats["processed"] += 1
             features            = extract_features(event)
             is_attack, score    = self.discriminator.predict(features)
 
             if is_attack:
+                src_ip = event.get("src_ip", "")
+                now    = time.time()
+                if now - self._alerted.get(src_ip, 0.0) < self._cooldown:
+                    continue
+                self._alerted[src_ip] = now
                 self.alert_writer.write(event, score)
                 stats["alerts"] += 1
                 self.logger.warning(
