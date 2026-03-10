@@ -246,6 +246,8 @@ class GANDDBridge:
         for event in self._tail_eve():
             if event.get("event_type") != "flow":
                 continue
+            if event.get("proto") not in ("TCP", "UDP"):
+                continue
 
             stats["processed"] += 1
             features            = extract_features(event)
