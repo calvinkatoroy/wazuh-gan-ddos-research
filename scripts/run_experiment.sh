@@ -26,8 +26,8 @@ DURATION=300          # seconds per trial
 BASELINE_DURATION=120 # benign baseline recording before each trial
 ATTACKER_IP="192.168.100.50"
 VICTIM_IP="192.168.100.100"
-RESULTS_DIR="data/results"
 REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+RESULTS_DIR="$REPO_ROOT/data/results"
 LOG_TS="$(date '+%Y%m%d_%H%M%S')"
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
@@ -140,7 +140,7 @@ signal_attacker() {
   case "$attack_type" in
     volumetric)
       ssh -o StrictHostKeyChecking=no root@"$ATTACKER_IP" \
-        "nohup hping3 -S -p 80 --flood --rand-source $VICTIM_IP > /tmp/attack.log 2>&1 &
+        "nohup hping3 -S -p 80 --flood $VICTIM_IP > /tmp/attack.log 2>&1 &
          echo \$! > /tmp/attack.pid" || log "[WARN] Could not SSH to attacker"
       ;;
     low-rate)
