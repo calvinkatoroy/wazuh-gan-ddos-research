@@ -257,6 +257,10 @@ class GANDDBridge:
                 continue
             if dest_ip.startswith(("224.", "239.")):        # skip multicast (SSDP/UPnP)
                 continue
+            if dest_ip.endswith(".255"):                    # skip broadcast
+                continue
+            if src_ip == "192.168.100.1":                  # skip VMware host adapter
+                continue
 
             # Skip single-packet flows — legitimate timeout flows (e.g. failed
             # TCP handshakes) are always pkt_count=1 and cause heuristic FPs
