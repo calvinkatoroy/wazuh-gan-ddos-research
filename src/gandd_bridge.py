@@ -12,7 +12,7 @@ Blue Team component — Calvin Wirathama Katoroy (2306242395)
 import json
 import math
 import os
-import pickle
+import joblib
 import time
 import logging
 import argparse
@@ -132,8 +132,7 @@ class RFDiscriminator:
 
     def _load(self, path: str):
         if os.path.exists(path):
-            with open(path, "rb") as fh:
-                model = pickle.load(fh)
+            model = joblib.load(path)
             logging.getLogger("gandd").info("RF model loaded from %s", path)
             return model
         logging.getLogger("gandd").warning(

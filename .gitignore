@@ -43,6 +43,7 @@ data/results/*
 !data/raw/.gitkeep
 !data/raw/synthetic_cicddos2019.csv
 !data/processed/.gitkeep
+!data/processed/rf_model.pkl
 !data/results/.gitkeep
 
 # Model checkpoints and weights
