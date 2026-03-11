@@ -249,6 +249,11 @@ class GANDDBridge:
                 continue
             if event.get("proto") not in ("TCP", "UDP"):
                 continue
+            src_ip = event.get("src_ip", "")
+            if ":" in src_ip:                          # skip IPv6
+                continue
+            if event.get("dest_port") == 53:           # skip DNS
+                continue
 
             # Skip single-packet flows — legitimate timeout flows (e.g. failed
             # TCP handshakes) are always pkt_count=1 and cause heuristic FPs
