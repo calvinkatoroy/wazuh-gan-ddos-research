@@ -249,10 +249,13 @@ class GANDDBridge:
                 continue
             if event.get("proto") not in ("TCP", "UDP"):
                 continue
-            src_ip = event.get("src_ip", "")
-            if ":" in src_ip:                          # skip IPv6
+            src_ip  = event.get("src_ip", "")
+            dest_ip = event.get("dest_ip", "")
+            if ":" in src_ip:                              # skip IPv6
                 continue
-            if event.get("dest_port") == 53:           # skip DNS
+            if event.get("dest_port") == 53:               # skip DNS
+                continue
+            if dest_ip.startswith(("224.", "239.")):        # skip multicast (SSDP/UPnP)
                 continue
 
             # Skip single-packet flows — legitimate timeout flows (e.g. failed
